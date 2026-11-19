@@ -32,6 +32,8 @@ pub struct MechState {
     pub view: MechView,
     /// Joint pose of the last plot redraw (plots only follow the cursor when it moved).
     drawn: Option<(f64, f64)>,
+    /// The first opening of the tab applies the selected preset (incl. its actuator) once.
+    pub opened: bool,
 }
 
 impl MechState {
@@ -59,6 +61,7 @@ impl MechState {
             phase: 0.0,
             view: MechView::default(),
             drawn: None,
+            opened: false,
         }
     }
 }
@@ -270,8 +273,7 @@ fn deg(v: f64) -> String {
 fn flag_text(ko: bool, ss: &[Sample]) -> String {
     let mut out = vec![];
     for (fl, en, k) in [
-        (Flag::Unassembled, "loop cannot close", "링크 폐합 불가"),
-        (Flag::Flip, "assembly-mode flip", "조립 모드 전환"),
+        (Flag::Unassembled, "loop cannot close (out of reach / toggle)", "링크 폐합 불가 (도달 불가 / 토글)"),
         (Flag::DeadPoint, "dead point (h ≈ 0)", "사점 (h ≈ 0)"),
         (Flag::LowAngle, "transmission angle < 20°", "전달각 < 20°"),
     ] {
@@ -599,7 +601,8 @@ pub fn drag(a: &mut App, act: MAction) {
     set_slider(a);
 }
 
-fn apply_preset(a: &mut App, i: usize) {
+/// Load preset `i`: geometry, load case, its actuator into config #1 and into the screw panel.
+pub fn apply_preset(a: &mut App, i: usize) {
     let (setup, act) = preset(i);
     a.m.preset = i;
     a.m.setup = setup;
@@ -638,16 +641,13 @@ pub fn wire() {
     });
     crate::on_id("m-kind", "change", |_| {
         with(|a| {
-            // Start each mechanism type from the preset of that type (geometry and load only).
+            // Start each mechanism type from the preset of that type.
             let i = match select("m-kind").value().as_str() {
                 "1" => 3,
                 "2" => 1,
                 _ => 0,
             };
-            a.m.setup = preset(i).0;
-            a.m.preset = i;
-            a.m.q = a.m.q.clamp(a.m.setup.q_min, a.m.setup.q_max);
-            a.m.view.reset(&a.m.setup);
+            apply_preset(a, i);
             render_inputs(a);
             recompute(a);
         });

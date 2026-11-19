@@ -213,6 +213,12 @@ fn set_mode(a: &mut App, mode: u8) {
     el("tab-act").class_list().toggle_with_force("on", !mech).ok();
     el("tab-mech").class_list().toggle_with_force("on", mech).ok();
     if mech {
+        if !a.m.opened {
+            // First visit: make the screw panel match the selected preset's actuator.
+            a.m.opened = true;
+            mechui::apply_preset(a, a.m.preset);
+            mechui::render_all(a);
+        }
         mechui::recompute(a);
     } else {
         render_numbers(a);

@@ -110,8 +110,6 @@ pub struct FourBarPose {
     pub ds_dq: f64,
     /// Coupler–shank-lever transmission angle (deg, 0…90).
     pub mu_deg: f64,
-    /// Sign of (K−C)×(P−K): flips when the linkage passes a toggle / changes assembly mode.
-    pub side: f64,
 }
 
 impl FourBar {
@@ -160,8 +158,7 @@ impl FourBar {
         if s < 1e-9 {
             return None;
         }
-        let side = kc[0] * (p[1] - k[1]) - kc[1] * (p[0] - k[0]);
-        Some(FourBarPose { k, p, s, ds_dq: dot2(kb, dk) / s, mu_deg: line_angle_deg(kp, p), side: side.signum() })
+        Some(FourBarPose { k, p, s, ds_dq: dot2(kb, dk) / s, mu_deg: line_angle_deg(kp, p) })
     }
 }
 
@@ -278,10 +275,9 @@ pub enum Flag {
     None,
     /// Transmission angle below MU_WARN / MU_FAIL.
     LowAngle,
-    /// The four-bar loop cannot close at this q.
+    /// The four-bar loop cannot close at this q (out of reach, or at a crank–coupler toggle where
+    /// the closed-form branch would have to switch assembly mode).
     Unassembled,
-    /// The four-bar passed a toggle (assembly-mode flip) since the previous sample.
-    Flip,
     /// Moment arm (nearly) zero: dead point.
     DeadPoint,
 }
@@ -391,25 +387,15 @@ pub struct Setup {
 /// Number of samples over the joint range.
 pub const N_SAMPLES: usize = 181;
 
-/// Kinematics over the joint range; flags assembly-mode flips of the four-bar.
+/// Kinematics over the joint range (N_SAMPLES evenly spaced samples).
+///
+/// The four-bar keeps its chosen assembly mode (closed-form branch) over the whole range: the crank
+/// tip lies on the fixed side of the line C–P, so a pose that would need the other mode shows up as
+/// `Flag::Unassembled` instead of silently jumping branches.
 pub fn sweep(st: &Setup) -> Vec<Sample> {
-    let mut out: Vec<Sample> = Vec::with_capacity(N_SAMPLES);
-    let mut side = 0.0;
-    for i in 0..N_SAMPLES {
-        let q = st.q_min + (st.q_max - st.q_min) * i as f64 / (N_SAMPLES - 1) as f64;
-        let mut s = st.mech.sample(q);
-        if let Mech::FourBar(f) = &st.mech {
-            if let Some(p) = f.pose(q) {
-                if side != 0.0 && p.side != side {
-                    s.status = Status::Fail;
-                    s.flag = Flag::Flip;
-                }
-                side = p.side;
-            }
-        }
-        out.push(s);
-    }
-    out
+    (0..N_SAMPLES)
+        .map(|i| st.mech.sample(st.q_min + (st.q_max - st.q_min) * i as f64 / (N_SAMPLES - 1) as f64))
+        .collect()
 }
 
 /// Screw actuator configuration for a mechanism (geometry, support and duty come from the screw panel).
@@ -768,7 +754,7 @@ mod tests {
                 assert_eq!(s.status, Status::Fail);
                 continue;
             }
-            if s.flag == Flag::Flip || s.flag == Flag::DeadPoint {
+            if s.flag == Flag::DeadPoint {
                 continue;
             }
             let want = if s.mu_deg < MU_FAIL { Status::Fail } else if s.mu_deg < MU_WARN { Status::Warn } else { Status::Ok };

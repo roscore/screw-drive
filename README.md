@@ -43,10 +43,11 @@
    vs 요구 토크, 관절 속도 한계 ω_max(q) = v_max / h(q), 모멘트 암과 전달각, (발목) 피치–롤 작업영역. 표의 열 머리글이나
    "불러오기"를 누르면 그 구성이 스크루 패널로 들어갑니다.
 4. 3D 뷰에서 슬라이더나 정강이 / 발 드래그로 자세를 바꾸면 스크루가 s(q)에 맞춰 회전하고 너트가 이동합니다. 그 자세에서
-   요구 힘이 가용 힘을 넘으면 액추에이터가 빨갛게 표시됩니다.
+   요구 힘이 가용 힘을 넘으면 액추에이터가 빨갛게 표시됩니다. 프리셋을 고르면(탭을 처음 열 때 포함) 그 액추에이터가
+   스크루 패널과 비교 구성 #1에 들어갑니다.
 
 모델: 평면 벡터 루프, 전달비 J(q) = ds/dq(해석해, 테스트에서 중앙 차분과 비교), τ = Jᵀ·F(가상일). 4절 링크는 원–원 교점
-닫힌 해, 전달각 < 20° 주의 / < 10° 불가, 폐합 불가·조립 모드 전환·사점 표시. 발목은 R = Ry(피치)·Rx(롤), 2×2 야코비안,
+닫힌 해, 전달각 < 20° 주의 / < 10° 불가, 폐합 불가(도달 불가 / 토글)·사점 표시, 선택한 조립 모드(분기)를 범위 전체에서 유지. 발목은 R = Ry(피치)·Rx(롤), 2×2 야코비안,
 |det J|가 중립 자세의 10 % 미만이면 특이. 스크루 길이 = 스트로크 + 너트 여유, 좌굴 / L10 / 위험 속도 / DN은 요구 액추에이터 힘
 τ_req / h로 계산하고 지지 방식·사용 조건·목표 수명은 스크루 패널 값을 씁니다. 스쿼트 시간(0→90°)은 속도 한계로 이동하며
 가속은 무시합니다.
@@ -121,11 +122,12 @@ torque and speed do I get, and which screw / lead / motor makes it work?" — an
    τ_av(q) = F·h(q) vs required, joint speed limit ω_max(q) = v_max / h(q), moment arm and transmission angle, and (ankle)
    the pitch–roll workspace. Click a column header or "Load" to put that config into the screw panel.
 4. In 3D, the slider or dragging the shank / foot sets the pose; the screw turns and the nut slides with s(q). The actuator
-   turns red where the required force exceeds the available force.
+   turns red where the required force exceeds the available force. Choosing a preset (also on the first opening of the
+   tab) puts its actuator into the screw panel and into config #1.
 
 Model: planar vector loops, transmission ratio J(q) = ds/dq (analytic, checked against central differences in the tests),
 τ = Jᵀ·F by virtual work. Four-bar: closed-form circle intersection, transmission angle < 20° warning / < 10° fail, and
-flags for unassemblable poses, assembly-mode flips and dead points. Ankle: R = Ry(pitch)·Rx(roll), 2×2 Jacobian, singular
+flags for unassemblable poses (out of reach / toggle) and dead points; the chosen assembly mode (branch) is kept over the whole range. Ankle: R = Ry(pitch)·Rx(roll), 2×2 Jacobian, singular
 where |det J| < 10 % of the neutral pose. Screw length = stroke + nut allowance; buckling / L10 / critical speed / DN use the
 required actuator force τ_req / h, with end supports, duty cycle and life target from the screw panel. Squat time (0→90°)
 moves at the speed limit and ignores acceleration.
