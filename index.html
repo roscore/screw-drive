@@ -48,6 +48,15 @@ th:first-child, td:first-child { text-align:left; }
 #results td:last-child { font-weight:600; }
 .note { color:var(--mut); font-size:12px; }
 h2 { font-size:14px; margin:0 0 6px; }
+#tabs { display:flex; gap:4px; padding:8px 16px 0; }
+#tabs button { border-radius:6px 6px 0 0; padding:5px 14px; }
+#act-tools, #m-tools { display:contents; }
+.bar { display:flex; gap:8px; align-items:center; margin-top:6px; }
+.bar input { flex:1; }
+.disclaimer { margin:0 0 8px; padding:6px 8px; border:1px dashed var(--warn); border-radius:6px; font-size:12px; color:var(--mut); }
+table.cmp input, table.cmp select { width:72px; padding:2px 4px; }
+table.cmp input[type=checkbox] { width:auto; }
+table.cmp th.cfg { cursor:pointer; text-decoration:underline; }
 </style>
 </head>
 <body>
@@ -56,6 +65,10 @@ h2 { font-size:14px; margin:0 0 6px; }
   <span class="sub" data-en="Ball / roller / lead screw actuator sizer for robot joints" data-ko="로봇 관절용 볼 / 롤러 / 리드 스크루 액추에이터 사이징">Ball / roller / lead screw actuator sizer for robot joints</span>
   <button id="lang">한국어</button>
 </header>
+<nav id="tabs">
+  <button id="tab-act" class="on" data-en="Actuator" data-ko="액추에이터">Actuator</button>
+  <button id="tab-mech" data-en="Mechanism" data-ko="메커니즘">Mechanism</button>
+</nav>
 <main>
 <section class="card" id="inputs">
   <fieldset><legend data-en="Screw" data-ko="스크루">Screw</legend>
@@ -96,11 +109,36 @@ h2 { font-size:14px; margin:0 0 6px; }
   <h2 data-en="Results" data-ko="결과">Results</h2>
   <table id="results"></table>
 </section>
+<section class="card" id="m-inputs" style="display:none">
+  <p class="disclaimer" data-en="Presets: approx., for comparison — edit to your design. Own estimates for a ~1.7 m / ~60 kg humanoid, not data of any real robot." data-ko="프리셋: 근사값, 비교용 — 설계에 맞게 수정하세요. 약 1.7 m / 60 kg 휴머노이드를 가정한 자체 추정치이며 실제 로봇의 데이터가 아닙니다.">Presets: approx., for comparison — edit to your design. Own estimates for a ~1.7 m / ~60 kg humanoid, not data of any real robot.</p>
+  <fieldset><legend data-en="Mechanism" data-ko="메커니즘">Mechanism</legend>
+    <label><span data-en="Preset" data-ko="프리셋">Preset</span><select id="m-preset">
+      <option value="0" data-en="Optimus-style knee (slider-crank, roller screw) — approx." data-ko="Optimus 스타일 무릎 (슬라이더-크랭크, 롤러 스크루) — 근사">Optimus-style knee (slider-crank, roller screw) — approx.</option>
+      <option value="1" data-en="Optimus-style dual-rod ankle — approx." data-ko="Optimus 스타일 듀얼 로드 발목 — 근사">Optimus-style dual-rod ankle — approx.</option>
+      <option value="2" data-en="Generic dual-rod ankle (humanoid)" data-ko="일반 듀얼 로드 발목 (휴머노이드)">Generic dual-rod ankle (humanoid)</option>
+      <option value="3" data-en="Generic four-bar knee" data-ko="일반 4절 링크 무릎">Generic four-bar knee</option>
+    </select></label>
+    <label><span data-en="Type" data-ko="종류">Type</span><select id="m-kind">
+      <option value="0" data-en="knee: actuator + crank (slider-crank)" data-ko="무릎: 액추에이터 + 크랭크 (슬라이더-크랭크)">knee: actuator + crank (slider-crank)</option>
+      <option value="1" data-en="knee: actuator + four-bar" data-ko="무릎: 액추에이터 + 4절 링크">knee: actuator + four-bar</option>
+      <option value="2" data-en="ankle: two parallel actuators (pitch + roll)" data-ko="발목: 병렬 액추에이터 2개 (피치 + 롤)">ankle: two parallel actuators (pitch + roll)</option>
+    </select></label>
+    <div id="m-dims"></div>
+  </fieldset>
+  <fieldset><legend data-en="Range and load case" data-ko="범위와 부하 조건">Range and load case</legend>
+    <div id="m-load"></div>
+    <p class="note" data-en="τ_req(q) = constant + m·g·L·cos(q + offset). Defaults: squat, body share on one knee / standing push-off on one ankle." data-ko="τ_req(q) = 상수 + m·g·L·cos(q + 오프셋). 기본값: 스쿼트 시 한쪽 무릎 / 한쪽 발목 푸시오프.">τ_req(q) = constant + m·g·L·cos(q + offset). Defaults: squat, body share on one knee / standing push-off on one ankle.</p>
+  </fieldset>
+  <p class="note" id="m-panel"></p>
+  <h2 data-en="Panel actuator on this mechanism" data-ko="이 메커니즘에서의 패널 액추에이터">Panel actuator on this mechanism</h2>
+  <table id="m-results"></table>
+</section>
 <section>
   <div id="view-wrap">
     <canvas id="view"></canvas>
     <div id="hud"></div>
     <div id="tools">
+      <span id="act-tools">
       <select id="cam">
         <option value="0" data-en="Perspective" data-ko="원근">Perspective</option>
         <option value="1" data-en="Top" data-ko="위">Top</option>
@@ -111,9 +149,12 @@ h2 { font-size:14px; margin:0 0 6px; }
       <button id="t-arrows" class="on" data-en="Forces" data-ko="힘">Forces</button>
       <button id="t-whirl" class="on" data-en="Whirl ghost" data-ko="휘돌림">Whirl ghost</button>
       <button id="t-play" class="on">Pause</button>
+      </span>
+      <span id="m-tools" style="display:none"><button id="m-play" class="on">Pause</button></span>
     </div>
     <div id="nogl" data-en="WebGL2 is not available — numbers and plots still work." data-ko="WebGL2를 사용할 수 없습니다 — 수치와 그래프는 계속 동작합니다.">WebGL2 is not available — numbers and plots still work.</div>
   </div>
+  <div id="act-extra">
   <div id="timebar">
     <select id="slow">
       <option value="1">1×</option>
@@ -131,6 +172,23 @@ h2 { font-size:14px; margin:0 0 6px; }
   <div class="card" style="margin-top:12px">
     <h2><span data-en="Find screws" data-ko="스크루 찾기">Find screws</span> <button id="find" data-en="Search" data-ko="검색">Search</button></h2>
     <table><thead><tr><th>d × l</th><th data-en="Torque margin" data-ko="토크 여유">Torque margin</th><th data-en="Min SF" data-ko="최소 SF">Min SF</th><th data-en="Life (y)" data-ko="수명 (년)">Life (y)</th><th data-en="Motor rpm" data-ko="모터 rpm">Motor rpm</th></tr></thead><tbody id="hits"></tbody></table>
+  </div>
+  </div>
+  <div id="mech-extra" style="display:none">
+    <div class="bar"><span data-en="Joint" data-ko="관절">Joint</span><input id="m-q" type="range" min="0" max="1000" value="0"><span id="m-qlabel" class="note"></span></div>
+    <div class="bar" id="m-roll-wrap"><span data-en="Roll" data-ko="롤">Roll</span><input id="m-roll" type="range" min="-1000" max="1000" value="0"></div>
+    <p class="note" data-en="Drag the shank / foot to move the joint (ankle: up-down = pitch, left-right = roll) · drag elsewhere: orbit · right drag / two fingers: pan · wheel / pinch: zoom · double-click: reset. The actuator turns red where the panel actuator cannot hold the required torque." data-ko="정강이 / 발을 끌어 관절 이동 (발목: 상하 = 피치, 좌우 = 롤) · 그 외 드래그: 회전 · 우클릭 드래그 / 두 손가락: 이동 · 휠 / 핀치: 확대 · 더블클릭: 초기화. 패널 액추에이터가 요구 토크를 못 버티는 자세에서는 액추에이터가 빨갛게 표시됩니다.">Drag the shank / foot to move the joint (ankle: up-down = pitch, left-right = roll) · drag elsewhere: orbit · right drag / two fingers: pan · wheel / pinch: zoom · double-click: reset. The actuator turns red where the panel actuator cannot hold the required torque.</p>
+    <div class="plots">
+      <div class="card"><h2 data-en="Joint torque: available vs required" data-ko="관절 토크: 가용 vs 요구">Joint torque: available vs required</h2><canvas class="plot" id="p-mtau"></canvas></div>
+      <div class="card"><h2 data-en="Joint speed limit ω_max" data-ko="관절 속도 한계 ω_max">Joint speed limit ω_max</h2><canvas class="plot" id="p-momega"></canvas></div>
+      <div class="card"><h2 data-en="Moment arm and transmission angle" data-ko="모멘트 암과 전달각">Moment arm and transmission angle</h2><canvas class="plot" id="p-mh"></canvas></div>
+      <div class="card" id="m-ws-card"><h2 data-en="Ankle pitch–roll workspace (panel actuator)" data-ko="발목 피치–롤 작업영역 (패널 액추에이터)">Ankle pitch–roll workspace (panel actuator)</h2><canvas class="plot" id="p-mws"></canvas></div>
+    </div>
+    <div class="card" style="margin-top:12px; overflow-x:auto">
+      <h2 data-en="Compare actuators on this mechanism (click a column header or Load to use it in the screw panel)" data-ko="이 메커니즘에서 액추에이터 비교 (열 머리글 또는 불러오기를 눌러 스크루 패널에 적용)">Compare actuators on this mechanism (click a column header or Load to use it in the screw panel)</h2>
+      <table id="m-cmp" class="cmp"></table>
+      <p class="note" data-en="Torque: actuator force limit × moment arm. Speed: min(motor, 0.8 × critical, DN) linear speed ÷ arm. Screw length = stroke + nut allowance; support, Ca of the panel column, duty cycle and life target come from the screw panel. Squat time ignores acceleration." data-ko="토크: 액추에이터 힘 한계 × 모멘트 암. 속도: min(모터, 0.8 × 위험 속도, DN) 선형 속도 ÷ 암. 스크루 길이 = 스트로크 + 너트 여유; 지지 방식, 패널 열의 Ca, 사용 조건과 목표 수명은 스크루 패널 값을 사용. 스쿼트 시간은 가속을 무시합니다.">Torque: actuator force limit × moment arm. Speed: min(motor, 0.8 × critical, DN) linear speed ÷ arm. Screw length = stroke + nut allowance; support, Ca of the panel column, duty cycle and life target come from the screw panel. Squat time ignores acceleration.</p>
+    </div>
   </div>
   <p class="note" data-en="Educational estimates with generic typical values — validate with the screw maker's data and real tests before trusting a robot with it." data-ko="일반적인 값을 사용한 교육용 추정치입니다 — 로봇에 적용하기 전에 스크루 제조사 데이터와 실제 시험으로 검증하세요.">Educational estimates with generic typical values — validate with the screw maker's data and real tests before trusting a robot with it.</p>
 </section>

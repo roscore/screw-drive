@@ -1,6 +1,8 @@
 //! Web UI for screw-drive: inputs ↔ sd_core, results table, HUD, plots, search, 3D view.
 pub mod gl;
 pub mod math;
+pub mod mech3d;
+mod mechui;
 pub mod plot;
 pub mod view3d;
 
@@ -24,6 +26,9 @@ struct App {
     dark: bool,
     last_ts: f64,
     tog: Toggles,
+    /// 0 = actuator tab, 1 = mechanism tab.
+    mode: u8,
+    m: mechui::MechState,
 }
 
 thread_local! {
@@ -198,6 +203,22 @@ fn apply_lang(ko: bool) {
     el("lang").set_text_content(Some(if ko { "English" } else { "한국어" }));
 }
 
+/// Switch tabs: show / hide the panels of each mode and redraw what was hidden.
+fn set_mode(a: &mut App, mode: u8) {
+    a.mode = mode;
+    let mech = mode == 1;
+    for (id, show) in [("inputs", !mech), ("act-extra", !mech), ("act-tools", !mech), ("m-inputs", mech), ("mech-extra", mech), ("m-tools", mech)] {
+        let _ = el(id).unchecked_ref::<HtmlElement>().style().set_property("display", if show { "" } else { "none" });
+    }
+    el("tab-act").class_list().toggle_with_force("on", !mech).ok();
+    el("tab-mech").class_list().toggle_with_force("on", mech).ok();
+    if mech {
+        mechui::recompute(a);
+    } else {
+        render_numbers(a);
+    }
+}
+
 fn set_play_label(a: &App) {
     el("t-play").set_text_content(Some(if a.playing { tr(a.ko, "Pause", "일시정지") } else { tr(a.ko, "Play", "재생") }));
     el("t-play").class_list().toggle_with_force("on", a.playing).ok();
@@ -217,6 +238,10 @@ fn frame(ts: f64) {
     with(|a| {
         let dt = ((ts - a.last_ts) / 1000.0).clamp(0.0, 0.1);
         a.last_ts = ts;
+        if a.mode == 1 {
+            mechui::frame(a, dt);
+            return;
+        }
         let total = cycle_time(&a.res).max(1e-6);
         if a.playing {
             a.t = (a.t + dt * a.slow).rem_euclid(total);
@@ -270,12 +295,26 @@ fn wire_view() {
         let e: PointerEvent = e.unchecked_into();
         let _ = el("view").set_pointer_capture(e.pointer_id());
         let (x, y) = canvas_xy(&e);
-        with(|a| if let Some(s) = a.scene.as_mut() { s.down(e.pointer_id(), x, y) });
+        with(|a| {
+            if a.mode == 1 {
+                a.m.view.down(e.pointer_id(), x, y);
+            } else if let Some(s) = a.scene.as_mut() {
+                s.down(e.pointer_id(), x, y)
+            }
+        });
     });
     on(&c, "pointermove", |e| {
         let e: PointerEvent = e.unchecked_into();
         let (x, y) = canvas_xy(&e);
         with(|a| {
+            if a.mode == 1 {
+                let (act, cursor) = a.m.view.moved(e.pointer_id(), x, y, e.buttons());
+                let _ = el("view").unchecked_ref::<HtmlElement>().style().set_property("cursor", cursor);
+                if let Some(act) = act {
+                    mechui::drag(a, act);
+                }
+                return;
+            }
             let Some(s) = a.scene.as_mut() else { return };
             let travel = s.travel() as f64;
             let (act, cursor) = s.moved(e.pointer_id(), x, y, e.buttons());
@@ -301,16 +340,34 @@ fn wire_view() {
     for ev in ["pointerup", "pointercancel"] {
         on(&c, ev, |e| {
             let e: PointerEvent = e.unchecked_into();
-            with(|a| if let Some(s) = a.scene.as_mut() { s.up(e.pointer_id()) });
+            with(|a| {
+                a.m.view.up(e.pointer_id());
+                if let Some(s) = a.scene.as_mut() {
+                    s.up(e.pointer_id())
+                }
+            });
         });
     }
     on(&c, "wheel", |e| {
         e.prevent_default();
         let e: WheelEvent = e.unchecked_into();
-        with(|a| if let Some(s) = a.scene.as_mut() { s.cam.zoom((e.delta_y() * 0.0015).exp() as f32) });
+        let f = (e.delta_y() * 0.0015).exp() as f32;
+        with(|a| {
+            if a.mode == 1 {
+                a.m.view.cam.zoom(f);
+            } else if let Some(s) = a.scene.as_mut() {
+                s.cam.zoom(f)
+            }
+        });
     });
     on(&c, "dblclick", |_| {
-        with(|a| if let Some(s) = a.scene.as_mut() { s.reset_view(&a.inp) });
+        with(|a| {
+            if a.mode == 1 {
+                a.m.view.reset(&a.m.setup);
+            } else if let Some(s) = a.scene.as_mut() {
+                s.reset_view(&a.inp)
+            }
+        });
     });
     on_id("cam", "change", |_| {
         with(|a| if let Some(s) = a.scene.as_mut() {
@@ -350,12 +407,12 @@ pub fn start() {
     });
     if scene.is_none() {
         let _ = el("nogl").unchecked_ref::<HtmlElement>().style().set_property("display", "flex");
-        for id in ["cam", "t-color", "t-arrows", "t-whirl"] {
+        for id in ["cam", "t-color", "t-arrows", "t-whirl", "m-play"] {
             let _ = el(id).unchecked_ref::<HtmlElement>().style().set_property("display", "none");
         }
     }
     let res = compute(&inp);
-    let app = App { inp, res, scene, hits: vec![], t: 0.0, playing: true, slow: 0.25, ko, dark, last_ts: 0.0, tog: Toggles { color: true, arrows: true, whirl: true } };
+    let app = App { inp, res, scene, hits: vec![], t: 0.0, playing: true, slow: 0.25, ko, dark, last_ts: 0.0, tog: Toggles { color: true, arrows: true, whirl: true }, mode: 0, m: mechui::MechState::new() };
     APP.with(|a| *a.borrow_mut() = Some(app));
     with(|a| {
         if let Some(s) = a.scene.as_mut() {
@@ -366,6 +423,11 @@ pub fn start() {
         }
         render_numbers(a);
         set_play_label(a);
+        a.m.view.reset(&a.m.setup);
+        a.m.view.cam.cur = a.m.view.cam.goal;
+        mechui::recompute(a);
+        mechui::render_all(a);
+        mechui::set_play_label(a);
     });
 
     for id in NUM_IDS.iter().chain(["kind", "support"].iter()) {
@@ -388,6 +450,8 @@ pub fn start() {
             apply_lang(a.ko);
             set_play_label(a);
             render_numbers(a);
+            mechui::set_play_label(a);
+            mechui::render_all(a);
         });
     });
     on_id("find", "click", |_| {
@@ -420,8 +484,20 @@ pub fn start() {
         with(|a| a.slow = select("slow").value().parse().unwrap_or(0.25));
     });
     on(&win, "resize", |_| {
-        with(|a| render_numbers(a));
+        with(|a| {
+            if a.mode == 1 {
+                mechui::render(a);
+            } else {
+                render_numbers(a);
+            }
+        });
     });
+    for (id, mode) in [("tab-act", 0u8), ("tab-mech", 1u8)] {
+        on_id(id, "click", move |_| {
+            with(|a| set_mode(a, mode));
+        });
+    }
+    mechui::wire();
     wire_view();
     start_loop();
 }

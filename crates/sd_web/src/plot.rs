@@ -22,6 +22,7 @@ struct Frame {
     y0: f64,
     w: f64,
     h: f64,
+    xmin: f64,
     xmax: f64,
     ymin: f64,
     ymax: f64,
@@ -29,7 +30,7 @@ struct Frame {
 
 impl Frame {
     fn px(&self, x: f64) -> f64 {
-        self.x0 + x / self.xmax * self.w
+        self.x0 + (x - self.xmin) / (self.xmax - self.xmin) * self.w
     }
     fn py(&self, y: f64) -> f64 {
         self.y0 + self.h - (y - self.ymin) / (self.ymax - self.ymin) * self.h
@@ -55,6 +56,11 @@ impl Frame {
 }
 
 fn setup(canvas: &HtmlCanvasElement, xmax: f64, ymin: f64, ymax: f64, col: &Colors, xlabel: &str, yticks: bool) -> Option<Frame> {
+    setup_x(canvas, 0.0, xmax, ymin, ymax, col, xlabel, yticks)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn setup_x(canvas: &HtmlCanvasElement, xmin: f64, xmax: f64, ymin: f64, ymax: f64, col: &Colors, xlabel: &str, yticks: bool) -> Option<Frame> {
     let dpr = web_sys::window()?.device_pixel_ratio();
     let (cw, ch) = (canvas.client_width() as f64, canvas.client_height() as f64);
     if cw < 10.0 {
@@ -65,7 +71,7 @@ fn setup(canvas: &HtmlCanvasElement, xmax: f64, ymin: f64, ymax: f64, col: &Colo
     let ctx: Ctx = canvas.get_context("2d").ok()??.dyn_into().ok()?;
     ctx.scale(dpr, dpr).ok()?;
     ctx.set_font("11px system-ui, sans-serif");
-    let f = Frame { ctx, x0: 44.0, y0: 8.0, w: cw - 54.0, h: ch - 32.0, xmax: xmax.max(1e-9), ymin, ymax: ymax.max(ymin + 1e-9) };
+    let f = Frame { ctx, x0: 44.0, y0: 8.0, w: cw - 54.0, h: ch - 32.0, xmin, xmax: xmax.max(xmin + 1e-9), ymin, ymax: ymax.max(ymin + 1e-9) };
     // Axes and 4 grid lines with tick labels.
     for i in 0..=4 {
         let y = ymin + (f.ymax - ymin) * i as f64 / 4.0;
@@ -73,7 +79,7 @@ fn setup(canvas: &HtmlCanvasElement, xmax: f64, ymin: f64, ymax: f64, col: &Colo
         if yticks {
             f.text(&fmt(y), 2.0, f.py(y) + 4.0, col.mut_);
         }
-        let x = f.xmax * i as f64 / 4.0;
+        let x = xmin + (f.xmax - xmin) * i as f64 / 4.0;
         f.line(&[(x, ymin), (x, f.ymax)], col.grid, 1.0);
         f.text(&fmt(x), f.px(x) - 10.0, ch - 12.0, col.mut_);
     }
@@ -147,4 +153,78 @@ pub fn timeline(canvas: &HtmlCanvasElement, r: &Results, t: f64, col: &Colors, l
     }
     let tc = t.rem_euclid(total.max(1e-9));
     f.line(&[(tc, -1.0), (tc, 1.0)], col.fg, 1.0);
+}
+
+/// One line of a `series` plot: y values (same length as x; non-finite points are skipped), colour, width.
+pub struct Series<'a> {
+    pub y: Vec<f64>,
+    pub color: &'a str,
+    pub width: f64,
+    pub label: String,
+}
+
+/// Several lines over a shared x axis with auto y range (finite values only), an optional vertical
+/// cursor and an optional dashed horizontal reference line.
+pub fn series(canvas: &HtmlCanvasElement, x: &[f64], lines: &[Series], cursor: Option<f64>, href: Option<(f64, &str)>, col: &Colors, xlabel: &str) {
+    let (xmin, xmax) = (x.first().copied().unwrap_or(0.0), x.last().copied().unwrap_or(1.0));
+    let fin = lines.iter().flat_map(|s| s.y.iter().copied()).chain(href.map(|h| h.0)).filter(|v| v.is_finite());
+    let (lo, hi) = fin.fold((0.0f64, 0.0f64), |(a, b), v| (a.min(v), b.max(v)));
+    let hi = if hi - lo < 1e-9 { lo + 1.0 } else { hi + 0.08 * (hi - lo) };
+    let lo = if lo < 0.0 { lo - 0.05 * (hi - lo) } else { 0.0 };
+    let Some(f) = setup_x(canvas, xmin, xmax, lo, hi, col, xlabel, true) else { return };
+    if let Some((y, c)) = href {
+        let _ = f.ctx.set_line_dash(&js_sys::Array::of2(&5.0.into(), &4.0.into()));
+        f.line(&[(xmin, y), (xmax, y)], c, 1.2);
+        let _ = f.ctx.set_line_dash(&js_sys::Array::new());
+    }
+    for (i, s) in lines.iter().enumerate() {
+        // Break the polyline at non-finite points.
+        let mut seg: Vec<(f64, f64)> = vec![];
+        for (xi, yi) in x.iter().zip(&s.y) {
+            if yi.is_finite() {
+                seg.push((*xi, yi.clamp(lo, hi)));
+            } else if !seg.is_empty() {
+                f.line(&seg, s.color, s.width);
+                seg.clear();
+            }
+        }
+        if !seg.is_empty() {
+            f.line(&seg, s.color, s.width);
+        }
+        f.text(&s.label, f.x0 + 8.0, f.y0 + 12.0 + 13.0 * i as f64, s.color);
+    }
+    if let Some(c) = cursor {
+        f.line(&[(c, lo), (c, hi)], col.fg, 1.0);
+    }
+}
+
+/// Colour ramp red → yellow → green for t in 0…1.
+pub fn ramp(t: f64) -> String {
+    let t = t.clamp(0.0, 1.0);
+    let (r, g) = if t < 0.5 { (230.0, 70.0 + 300.0 * t) } else { (230.0 - 330.0 * (t - 0.5), 220.0) };
+    format!("rgb({:.0},{:.0},70)", r.max(0.0), g.min(220.0))
+}
+
+/// Pitch–roll workspace heat map (degrees on both axes): cell colour = value / vmax on `ramp`,
+/// singular cells hatched grey; `mark` is the current pose.
+#[allow(clippy::too_many_arguments)]
+pub fn heatmap(canvas: &HtmlCanvasElement, cells: &[(f64, f64, f64, bool)], n: (usize, usize), px: (f64, f64), ry: (f64, f64), vmax: f64, mark: (f64, f64), col: &Colors, labels: [&str; 3]) {
+    let Some(f) = setup_x(canvas, px.0, px.1, ry.0, ry.1, col, labels[0], true) else { return };
+    let (cw, chh) = (f.w / n.0 as f64, f.h / n.1 as f64);
+    for (p, r, v, sing) in cells {
+        let (x, y) = (f.px(*p) - 0.5 * cw, f.py(*r) - 0.5 * chh);
+        let c = if *sing { "#808080".to_string() } else { ramp(v / vmax.max(1e-9)) };
+        f.ctx.set_fill_style_str(&c);
+        f.ctx.fill_rect(x, y, cw + 0.5, chh + 0.5);
+        if *sing {
+            f.line(&[(*p - 0.4 * (px.1 - px.0) / n.0 as f64, *r - 0.4 * (ry.1 - ry.0) / n.1 as f64), (*p + 0.4 * (px.1 - px.0) / n.0 as f64, *r + 0.4 * (ry.1 - ry.0) / n.1 as f64)], "#303030", 1.0);
+        }
+    }
+    f.ctx.set_stroke_style_str(col.fg);
+    f.ctx.set_line_width(2.0);
+    f.ctx.begin_path();
+    let _ = f.ctx.arc(f.px(mark.0), f.py(mark.1), 5.0, 0.0, std::f64::consts::TAU);
+    f.ctx.stroke();
+    f.text(labels[1], f.x0 + 6.0, f.y0 + 12.0, col.fg);
+    f.text(labels[2], f.x0 + 6.0, f.y0 + 25.0, col.fg);
 }

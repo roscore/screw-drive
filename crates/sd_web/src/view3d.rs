@@ -22,39 +22,39 @@ enum Pick {
 
 /// Layout of the current frame, kept for picking.
 #[derive(Clone, Copy, Default)]
-struct Layout {
-    o: V,
-    ax: V,
-    ey: V,
-    ez: V,
-    len: f32,
-    x_start: f32,
-    x_end: f32,
-    carriage: V,
-    end: V,
-    pick_r: f32,
+pub(crate) struct Layout {
+    pub(crate) o: V,
+    pub(crate) ax: V,
+    pub(crate) ey: V,
+    pub(crate) ez: V,
+    pub(crate) len: f32,
+    pub(crate) x_start: f32,
+    pub(crate) x_end: f32,
+    pub(crate) carriage: V,
+    pub(crate) end: V,
+    pub(crate) pick_r: f32,
 }
 
 impl Layout {
     fn fw(&self, p: V) -> V {
         math::add(math::add(math::scale(self.ax, p[0]), math::scale(self.ey, p[1])), math::scale(self.ez, p[2]))
     }
-    fn at(&self, p: V) -> V {
+    pub(crate) fn at(&self, p: V) -> V {
         math::add(self.o, self.fw(p))
     }
     /// Box centred at frame point `c` with frame-aligned size `s`.
-    fn boxm(&self, c: V, s: V) -> M4 {
+    pub(crate) fn boxm(&self, c: V, s: V) -> M4 {
         math::basis(self.ax, self.ey, self.ez, s, self.at(c))
     }
     /// Cylinder (mesh axis y) along frame x from `x0` to `x1` at frame (y, z), radius `r`, spun by `spin`.
-    fn rod(&self, x0: f32, x1: f32, y: f32, z: f32, r: f32, spin: f32) -> M4 {
+    pub(crate) fn rod(&self, x0: f32, x1: f32, y: f32, z: f32, r: f32, spin: f32) -> M4 {
         let (s, c) = spin.sin_cos();
         let px = math::add(math::scale(self.ey, c), math::scale(self.ez, s));
         let pz = math::cross(px, self.ax);
         math::basis(px, self.ax, pz, [2.0 * r, x1 - x0, 2.0 * r], self.at([0.5 * (x0 + x1), y, z]))
     }
     /// Unscaled mesh built along y from frame origin (the thread), spun by `spin`.
-    fn spun(&self, spin: f32) -> M4 {
+    pub(crate) fn spun(&self, spin: f32) -> M4 {
         let (s, c) = spin.sin_cos();
         let px = math::add(math::scale(self.ey, c), math::scale(self.ez, s));
         math::basis(px, self.ax, math::cross(px, self.ax), [1.0; 3], self.o)
@@ -62,7 +62,7 @@ impl Layout {
 }
 
 /// Cylinder / cone mesh from `a` along unit `dir` with length `len` and radius `r` (mesh axis y).
-fn along(a: V, dir: V, len: f32, r: f32) -> M4 {
+pub(crate) fn along(a: V, dir: V, len: f32, r: f32) -> M4 {
     let helper = if dir[1].abs() < 0.9 { [0.0, 1.0, 0.0] } else { [1.0, 0.0, 0.0] };
     let x = math::norm(math::cross(helper, dir));
     let z = math::cross(x, dir);
@@ -116,9 +116,9 @@ pub struct Toggles {
 
 pub struct Scene {
     pub r: Renderer,
-    cyl: Mesh,
-    cube: Mesh,
-    cone: Mesh,
+    pub(crate) cyl: Mesh,
+    pub(crate) cube: Mesh,
+    pub(crate) cone: Mesh,
     thread: Option<(Mesh, [u64; 3], f32)>,
     pub cam: OrbitCam,
     pub preset: u8,
@@ -131,7 +131,7 @@ pub struct Scene {
     size: (f32, f32),
 }
 
-fn status_rgb(s: Status, margin: f64) -> [f32; 3] {
+pub(crate) fn status_rgb(s: Status, margin: f64) -> [f32; 3] {
     let (g, y, r) = ([0.30, 0.78, 0.40], [0.95, 0.78, 0.20], [0.92, 0.30, 0.25]);
     match s {
         Status::Fail => r,
@@ -166,6 +166,22 @@ impl Scene {
         Some(s)
     }
 
+    /// (Re)build the cached thread mesh for diameter `d`, visual lead, length and root diameter (m).
+    pub(crate) fn ensure_thread(&mut self, d: f32, lead_vis: f32, len: f32, dr: f32) {
+        let key = [d.to_bits() as u64, lead_vis.to_bits() as u64, ((len.to_bits() as u64) << 32) | dr.to_bits() as u64];
+        if self.thread.as_ref().map(|t| t.1) != Some(key) {
+            if let Some((m, _, _)) = self.thread.take() {
+                self.r.free(m);
+            }
+            let g = thread(0.5 * dr, 0.5 * d, lead_vis, len, (0.35 * lead_vis).min(0.25 * d));
+            self.thread = self.r.mesh(&g).map(|m| (m, key, lead_vis));
+        }
+    }
+
+    pub(crate) fn thread_mesh(&self) -> Option<&Mesh> {
+        self.thread.as_ref().map(|t| &t.0)
+    }
+
     fn preset_orbit(&self, inp: &Inputs) -> Orbit {
         let l = (inp.length_mm as f32 / 1000.0).max(0.2);
         let mid = self.lay.at([0.5 * self.lay.len, 0.0, 0.0]);
@@ -189,14 +205,7 @@ impl Scene {
         let len = inp.length_mm as f32 / 1000.0;
         let dr = res.dr_mm as f32 / 1000.0;
         let lead_vis = lead.max(len / 120.0);
-        let key = [inp.d_mm.to_bits(), inp.lead_mm.to_bits(), inp.length_mm.to_bits()];
-        if self.thread.as_ref().map(|t| t.1) != Some(key) {
-            if let Some((m, _, _)) = self.thread.take() {
-                self.r.free(m);
-            }
-            let g = thread(0.5 * dr, 0.5 * d, lead_vis, len, (0.35 * lead_vis).min(0.25 * d));
-            self.thread = self.r.mesh(&g).map(|m| (m, key, lead_vis));
-        }
+        self.ensure_thread(d, lead_vis, len, dr);
 
         // Frame layout: x along the axis, y "up" in the tilt plane, z sideways.
         let th = (inp.angle_deg as f32).to_radians();
