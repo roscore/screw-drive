@@ -1,0 +1,6 @@
+[build]
+target = "index.html"
+dist = "dist"
+filehash = false
+public_url = "/screw-drive/"
+pattern_script = "<script type=\"module\" src=\"{base}boot.js\"></script>"

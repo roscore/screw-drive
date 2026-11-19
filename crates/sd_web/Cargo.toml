@@ -1,0 +1,23 @@
+[package]
+name = "sd_web"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+sd_core = { path = "../sd_core" }
+wasm-bindgen = "0.2"
+js-sys = "0.3"
+
+[dependencies.web-sys]
+version = "0.3"
+features = [
+  "console", "Window", "Document", "Element", "HtmlElement", "HtmlInputElement", "HtmlSelectElement",
+  "HtmlCanvasElement", "CanvasRenderingContext2d", "Navigator", "NodeList", "CssStyleDeclaration",
+  "DomRect", "DomTokenList", "MediaQueryList", "Node", "Event", "EventTarget", "MouseEvent", "PointerEvent", "WheelEvent",
+  "WebGl2RenderingContext", "WebGlBuffer", "WebGlProgram", "WebGlShader", "WebGlUniformLocation",
+  "WebGlVertexArrayObject", "WebGlContextAttributes",
+]
