@@ -100,9 +100,15 @@ pub fn envelope(canvas: &HtmlCanvasElement, r: &Results, col: &Colors, labels: [
     let fmax = r.f_avail.max(r.f_peak) * 1.15;
     let Some(f) = setup(canvas, vmax, 0.0, fmax, col, "mm/s · N", true) else { return };
     f.line(&[(0.0, r.f_avail), (r.v_motor_max, r.f_avail), (r.v_motor_max, 0.0)], C_MOTOR, 2.0);
-    for (v, c) in [(r.v_crit, C_CRIT), (r.v_dn, C_DN)] {
+    for (i, (v, c)) in [(r.v_crit, C_CRIT), (r.v_dn, C_DN)].into_iter().enumerate() {
         if v < vmax {
             f.line(&[(v, 0.0), (v, fmax)], c, 1.5);
+        } else {
+            // Off-scale limit: pinned marker at the right edge with its value.
+            let y = fmax * (0.55 - 0.12 * i as f64);
+            f.line(&[(vmax * 0.97, y), (vmax, y)], c, 3.0);
+            let s = format!("{} mm/s →", fmt(v));
+            f.text(&s, f.px(vmax) - 8.0 - 6.0 * s.len() as f64, f.py(y) + 4.0, c);
         }
     }
     f.ctx.set_fill_style_str(C_PT);

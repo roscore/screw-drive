@@ -350,7 +350,9 @@ pub fn start() {
     });
     if scene.is_none() {
         let _ = el("nogl").unchecked_ref::<HtmlElement>().style().set_property("display", "flex");
-        let _ = el("tools").unchecked_ref::<HtmlElement>().style().set_property("display", "none");
+        for id in ["cam", "t-color", "t-arrows", "t-whirl"] {
+            let _ = el(id).unchecked_ref::<HtmlElement>().style().set_property("display", "none");
+        }
     }
     let res = compute(&inp);
     let app = App { inp, res, scene, hits: vec![], t: 0.0, playing: true, slow: 0.25, ko, dark, last_ts: 0.0, tog: Toggles { color: true, arrows: true, whirl: true } };

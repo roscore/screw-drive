@@ -119,7 +119,7 @@ pub struct Scene {
     cyl: Mesh,
     cube: Mesh,
     cone: Mesh,
-    thread: Option<(Mesh, [u32; 3], f32)>,
+    thread: Option<(Mesh, [u64; 3], f32)>,
     pub cam: OrbitCam,
     pub preset: u8,
     lay: Layout,
@@ -189,7 +189,7 @@ impl Scene {
         let len = inp.length_mm as f32 / 1000.0;
         let dr = res.dr_mm as f32 / 1000.0;
         let lead_vis = lead.max(len / 120.0);
-        let key = [inp.d_mm.to_bits() as u32, inp.lead_mm.to_bits() as u32, inp.length_mm.to_bits() as u32];
+        let key = [inp.d_mm.to_bits(), inp.lead_mm.to_bits(), inp.length_mm.to_bits()];
         if self.thread.as_ref().map(|t| t.1) != Some(key) {
             if let Some((m, _, _)) = self.thread.take() {
                 self.r.free(m);
@@ -215,7 +215,8 @@ impl Scene {
         let x_lo = if belt { -0.06 } else { -0.04 - ml };
         let (y_lo, y_hi) = (base_y - 0.012, hs + 0.08);
         let lift = [x_lo, len + 0.03].iter().flat_map(|x| [y_lo, y_hi].map(|y| x * sn + y * cs)).fold(f32::MAX, f32::min);
-        let o = [-0.5 * len * cs, 0.005 - lift, 0.0];
+        // Motor end anchored, so dragging the far support moves it 1:1 with the pointer.
+        let o = [-0.2 * cs, 0.005 - lift, 0.0];
         let mut lay = Layout { o, ax, ey, ez, len, x_start, x_end, ..Layout::default() };
         let xn = (x_start + pos as f32).clamp(x_start, x_end);
         let carriage_c = [xn, hs + 0.03, 0.0];
