@@ -3,6 +3,8 @@
 //! Textbook relations only; all preset values are generic "typical" estimates.
 //! Internally SI (m, N, s, rad); inputs/outputs carry their unit in the field name.
 
+pub mod mech;
+
 use std::f64::consts::PI;
 
 pub const G: f64 = 9.81;
