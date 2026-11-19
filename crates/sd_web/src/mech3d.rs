@@ -65,7 +65,7 @@ pub struct ActDraw {
 impl Default for MechView {
     fn default() -> Self {
         MechView {
-            cam: OrbitCam::new(Orbit { target: [0.0, 0.35, 0.0], yaw: 1.1, pitch: 0.2, dist: 1.3 }),
+            cam: OrbitCam::new(Orbit { target: [0.0, 0.35, 0.0], yaw: 0.45, pitch: 0.2, dist: 1.3 }),
             hover: Pick::None,
             drag: Pick::None,
             pointers: vec![],
@@ -81,8 +81,8 @@ impl Default for MechView {
 impl MechView {
     pub fn reset(&mut self, st: &Setup) {
         let o = match st.mech {
-            Mech::Ankle(_) => Orbit { target: [0.0, 0.22, 0.0], yaw: 0.9, pitch: 0.25, dist: 0.95 },
-            _ => Orbit { target: [0.0, KNEE_Y - 0.02, 0.0], yaw: 1.15, pitch: 0.18, dist: 1.35 },
+            Mech::Ankle(_) => Orbit { target: [0.0, 0.22, 0.0], yaw: -0.75, pitch: 0.3, dist: 0.95 },
+            _ => Orbit { target: [0.0, KNEE_Y - 0.02, 0.0], yaw: 0.45, pitch: 0.18, dist: 1.25 },
         };
         self.cam.set_goal(o);
     }

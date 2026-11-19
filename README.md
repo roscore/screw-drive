@@ -29,8 +29,31 @@
 - 3D의 나사산은 L / l이 120회전을 넘으면 리드를 늘려서(스케일) 그리며, 휘돌림 모드 형상은 시각용 근사입니다.
 
 ### 조작
+- 상단 탭: **액추에이터** (스크루 단독) / **메커니즘** (무릎·발목 링크, 아래 참고).
 - 드래그: 회전 · 우클릭 드래그 / 두 손가락: 이동 · 휠 / 핀치: 확대 · 더블클릭: 시점 초기화
 - 캐리지를 축 방향으로 끌면 시간 이동, 끝 지지부를 끌면 L 변경. 시점 프리셋: 원근 / 위 / 옆 / 너트 추적.
+
+### 메커니즘 모드 (무릎 / 발목 링크)
+"휴머노이드의 무릎이나 발목을 링크를 거쳐 리니어 액추에이터로 구동할 때, 관절 전체 범위에서 토크와 속도가 얼마나 나오고
+어떤 스크루 / 리드 / 모터가 맞는가?" — **Mechanism** 탭에서 답합니다.
+1. 프리셋 또는 종류를 고릅니다: 무릎 슬라이더-크랭크(액추에이터 + 정강이 레버), 무릎 4절 링크(액추에이터 → 크랭크 → 커플러 →
+   정강이 레버), 발목 병렬 액추에이터 2개(피치 + 롤). 치수는 모두 편집할 수 있습니다.
+2. 범위와 부하 조건을 입력합니다: τ_req(q) = 상수 + m·g·L·cos(q + 오프셋), 목표 관절 속도(°/s).
+3. 스크루 패널(액추에이터 탭)의 액추에이터와 비교용 4개 구성을 같은 메커니즘에서 비교합니다: 가용 토크 τ_av(q) = F·h(q)
+   vs 요구 토크, 관절 속도 한계 ω_max(q) = v_max / h(q), 모멘트 암과 전달각, (발목) 피치–롤 작업영역. 표의 열 머리글이나
+   "불러오기"를 누르면 그 구성이 스크루 패널로 들어갑니다.
+4. 3D 뷰에서 슬라이더나 정강이 / 발 드래그로 자세를 바꾸면 스크루가 s(q)에 맞춰 회전하고 너트가 이동합니다. 그 자세에서
+   요구 힘이 가용 힘을 넘으면 액추에이터가 빨갛게 표시됩니다.
+
+모델: 평면 벡터 루프, 전달비 J(q) = ds/dq(해석해, 테스트에서 중앙 차분과 비교), τ = Jᵀ·F(가상일). 4절 링크는 원–원 교점
+닫힌 해, 전달각 < 20° 주의 / < 10° 불가, 폐합 불가·조립 모드 전환·사점 표시. 발목은 R = Ry(피치)·Rx(롤), 2×2 야코비안,
+|det J|가 중립 자세의 10 % 미만이면 특이. 스크루 길이 = 스트로크 + 너트 여유, 좌굴 / L10 / 위험 속도 / DN은 요구 액추에이터 힘
+τ_req / h로 계산하고 지지 방식·사용 조건·목표 수명은 스크루 패널 값을 씁니다. 스쿼트 시간(0→90°)은 속도 한계로 이동하며
+가속은 무시합니다.
+
+> **프리셋은 근사값, 비교용입니다 — 설계에 맞게 수정하세요 (approx., for comparison — edit to your design).**
+> "Optimus 스타일" 프리셋의 형상은 약 1.7 m / 60 kg 휴머노이드를 가정한 자체 추정치이고, 힘 등급(≈ 3.9 kN / 8 kN급)만
+> 공개 발표된 액추에이터 등급을 참고했습니다. 실제 로봇의 치수나 사양이 아닙니다.
 
 ### 로컬 빌드
 ```sh
@@ -83,9 +106,33 @@ network requests).
 - In 3D the thread lead is stretched when L / l exceeds 120 turns; the whirl mode shape is a visual approximation.
 
 ### Controls
+- Tabs at the top: **Actuator** (screw on its own) / **Mechanism** (knee / ankle linkages, see below).
 - Drag: orbit · right drag / two fingers: pan · wheel / pinch: zoom · double-click: reset view.
 - Drag the carriage along the axis to scrub time; drag the far end support to change L.
   View presets: Perspective / Top / Side / Nut-follow.
+
+### Mechanism mode (knee / ankle linkages)
+"My humanoid's knee or ankle is driven by a linear actuator through a linkage — over the joint's whole range, what joint
+torque and speed do I get, and which screw / lead / motor makes it work?" — answered on the **Mechanism** tab.
+1. Pick a preset or a type: knee slider-crank (actuator + shank lever), knee four-bar (actuator → crank → coupler → shank
+   lever), or ankle with two parallel actuators (pitch + roll). Every dimension is editable.
+2. Set the range and load case: τ_req(q) = constant + m·g·L·cos(q + offset) and a target joint speed (°/s).
+3. Compare the screw-panel actuator (Actuator tab) and up to four configs on the same mechanism: available torque
+   τ_av(q) = F·h(q) vs required, joint speed limit ω_max(q) = v_max / h(q), moment arm and transmission angle, and (ankle)
+   the pitch–roll workspace. Click a column header or "Load" to put that config into the screw panel.
+4. In 3D, the slider or dragging the shank / foot sets the pose; the screw turns and the nut slides with s(q). The actuator
+   turns red where the required force exceeds the available force.
+
+Model: planar vector loops, transmission ratio J(q) = ds/dq (analytic, checked against central differences in the tests),
+τ = Jᵀ·F by virtual work. Four-bar: closed-form circle intersection, transmission angle < 20° warning / < 10° fail, and
+flags for unassemblable poses, assembly-mode flips and dead points. Ankle: R = Ry(pitch)·Rx(roll), 2×2 Jacobian, singular
+where |det J| < 10 % of the neutral pose. Screw length = stroke + nut allowance; buckling / L10 / critical speed / DN use the
+required actuator force τ_req / h, with end supports, duty cycle and life target from the screw panel. Squat time (0→90°)
+moves at the speed limit and ignores acceleration.
+
+> **Presets are approx., for comparison — edit to your design.** The "Optimus-style" geometry is an own estimate for a
+> ~1.7 m / ~60 kg humanoid; only the force classes (≈ 3.9 kN / 8 kN) follow publicly presented actuator classes. They are
+> not the dimensions or specs of any real robot.
 
 ### Local build
 ```sh
