@@ -148,7 +148,7 @@ pub enum Status {
 }
 
 fn grade(margin: f64, warn_below: f64) -> Status {
-    if !(margin >= 1.0) {
+    if margin.is_nan() || margin < 1.0 {
         Status::Fail
     } else if margin < warn_below {
         Status::Warn
