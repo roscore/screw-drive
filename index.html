@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'">
+<title>screw-drive</title>
+<link data-trunk rel="rust" href="crates/sd_web" data-wasm-opt="z">
+<link data-trunk rel="copy-file" href="web/boot.js">
+<style>
+:root { --bg:#f4f5f7; --fg:#1d2128; --mut:#5b6472; --card:#fff; --line:#d5d9e0; --acc:#2f6fdb; --ok:#1f9d55; --warn:#c98a00; --fail:#d33a2c; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg:#14171c; --fg:#e4e7ec; --mut:#9aa3b2; --card:#1d2128; --line:#333a45; --acc:#6ea0ff; --ok:#3ccf7a; --warn:#f0b429; --fail:#ff6b5b; }
+}
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.4 system-ui, sans-serif; }
+header { display:flex; align-items:center; gap:12px; padding:8px 16px; border-bottom:1px solid var(--line); }
+header h1 { font-size:17px; margin:0; }
+header .sub { color:var(--mut); flex:1; }
+main { display:grid; grid-template-columns:320px 1fr; gap:12px; padding:12px 16px; }
+@media (max-width: 860px) { main { grid-template-columns:1fr; } }
+.card { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:10px; }
+fieldset { border:1px solid var(--line); border-radius:6px; margin:0 0 8px; padding:6px 8px; }
+legend { color:var(--mut); font-size:12px; }
+label { display:grid; grid-template-columns:1fr 110px; align-items:center; gap:6px; margin:3px 0; font-size:13px; }
+input, select, button { font:inherit; color:var(--fg); background:var(--bg); border:1px solid var(--line); border-radius:5px; padding:3px 6px; min-width:0; }
+button { cursor:pointer; }
+button.on { background:var(--acc); color:#fff; border-color:var(--acc); }
+#view-wrap { position:relative; height:440px; border-radius:8px; overflow:hidden; border:1px solid var(--line); background:#000; }
+#view { width:100%; height:100%; display:block; touch-action:none; }
+#hud { position:absolute; left:8px; top:8px; background:rgba(0,0,0,.55); color:#fff; border-radius:6px; padding:6px 8px; font:12px/1.45 ui-monospace, monospace; pointer-events:none; }
+#hud b { font-weight:600; }
+#tools { position:absolute; z-index:1; right:8px; top:8px; display:flex; flex-wrap:wrap; gap:4px; justify-content:flex-end; max-width:60%; }
+#tools button, #tools select { background:rgba(0,0,0,.55); color:#fff; border-color:rgba(255,255,255,.3); font-size:12px; }
+#tools button.on { background:var(--acc); }
+#nogl { display:none; position:absolute; inset:0; align-items:center; justify-content:center; color:#fff; padding:16px; text-align:center; }
+#timebar { display:flex; gap:8px; align-items:center; margin-top:6px; }
+#timebar input { flex:1; }
+.plots { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px; }
+@media (max-width: 860px) { .plots { grid-template-columns:1fr; } }
+canvas.plot { width:100%; height:220px; display:block; }
+table { width:100%; border-collapse:collapse; font-size:13px; }
+td, th { padding:3px 6px; border-bottom:1px solid var(--line); text-align:right; }
+th:first-child, td:first-child { text-align:left; }
+#hits tr { cursor:pointer; }
+#hits tr:hover { background:var(--bg); }
+.ok { color:var(--ok); } .warn { color:var(--warn); } .fail { color:var(--fail); }
+#results td:last-child { font-weight:600; }
+.note { color:var(--mut); font-size:12px; }
+h2 { font-size:14px; margin:0 0 6px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>screw-drive</h1>
+  <span class="sub" data-en="Ball / roller / lead screw actuator sizer for robot joints" data-ko="로봇 관절용 볼 / 롤러 / 리드 스크루 액추에이터 사이징">Ball / roller / lead screw actuator sizer for robot joints</span>
+  <button id="lang">한국어</button>
+</header>
+<main>
+<section class="card" id="inputs">
+  <fieldset><legend data-en="Screw" data-ko="스크루">Screw</legend>
+    <label><span data-en="Type" data-ko="종류">Type</span><select id="kind">
+      <option value="0" data-en="ball screw (typical)" data-ko="볼 스크루 (일반값)">ball screw (typical)</option>
+      <option value="1" data-en="planetary roller screw (typical)" data-ko="유성 롤러 스크루 (일반값)">planetary roller screw (typical)</option>
+      <option value="2" data-en="trapezoidal, bronze nut (typical)" data-ko="사다리꼴, 청동 너트 (일반값)">trapezoidal, bronze nut (typical)</option>
+      <option value="3" data-en="trapezoidal, POM nut (typical)" data-ko="사다리꼴, POM 너트 (일반값)">trapezoidal, POM nut (typical)</option>
+    </select></label>
+    <label><span data-en="Diameter d (mm)" data-ko="호칭경 d (mm)">Diameter d (mm)</span><input id="d" type="number" min="6" max="40" step="1"></label>
+    <label><span data-en="Lead l (mm)" data-ko="리드 l (mm)">Lead l (mm)</span><input id="lead" type="number" min="1" max="40" step="1"></label>
+    <label><span data-en="Length between supports L (mm)" data-ko="지지 간 길이 L (mm)">Length between supports L (mm)</span><input id="len" type="number" min="50" max="3000" step="10"></label>
+    <label><span data-en="End supports" data-ko="지지 방식">End supports</span><select id="support">
+      <option value="0" data-en="fixed – free" data-ko="고정 – 자유">fixed – free</option>
+      <option value="1" data-en="fixed – simple" data-ko="고정 – 단순">fixed – simple</option>
+      <option value="2" data-en="simple – simple" data-ko="단순 – 단순">simple – simple</option>
+      <option value="3" data-en="fixed – fixed" data-ko="고정 – 고정">fixed – fixed</option>
+    </select></label>
+    <label><span data-en="Dynamic load rating Ca (kN)" data-ko="동정격하중 Ca (kN)">Dynamic load rating Ca (kN)</span><input id="ca" type="number" min="0.1" step="0.1"></label>
+  </fieldset>
+  <fieldset><legend data-en="Motor" data-ko="모터">Motor</legend>
+    <label><span data-en="Torque (N·m)" data-ko="토크 (N·m)">Torque (N·m)</span><input id="mt" type="number" min="0.01" step="0.05"></label>
+    <label><span data-en="Max speed (rpm)" data-ko="최대 속도 (rpm)">Max speed (rpm)</span><input id="mrpm" type="number" min="10" step="100"></label>
+    <label><span data-en="Belt / gear ratio" data-ko="벨트 / 기어비">Belt / gear ratio</span><input id="ratio" type="number" min="0.2" max="10" step="0.1"></label>
+  </fieldset>
+  <fieldset><legend data-en="Load and move" data-ko="부하와 동작">Load and move</legend>
+    <label><span data-en="Moving mass (kg)" data-ko="이동 질량 (kg)">Moving mass (kg)</span><input id="mass" type="number" min="0" step="1"></label>
+    <label><span data-en="Axis angle (°, 90 = vertical)" data-ko="축 각도 (°, 90 = 수직)">Axis angle (°, 90 = vertical)</span><input id="angle" type="number" min="0" max="90" step="5"></label>
+    <label><span data-en="External force (N)" data-ko="외력 (N)">External force (N)</span><input id="fext" type="number" step="10"></label>
+    <label><span data-en="Stroke (mm)" data-ko="스트로크 (mm)">Stroke (mm)</span><input id="stroke" type="number" min="1" step="10"></label>
+    <label><span data-en="Target speed (mm/s)" data-ko="목표 속도 (mm/s)">Target speed (mm/s)</span><input id="vmax" type="number" min="1" step="10"></label>
+    <label><span data-en="Acceleration (m/s²)" data-ko="가속도 (m/s²)">Acceleration (m/s²)</span><input id="acc" type="number" min="0.01" step="0.1"></label>
+  </fieldset>
+  <fieldset><legend data-en="Duty cycle" data-ko="사용 조건">Duty cycle</legend>
+    <label><span data-en="Cycles per day" data-ko="일일 사이클">Cycles per day</span><input id="cpd" type="number" min="0" step="100"></label>
+    <label><span data-en="Target life (years)" data-ko="목표 수명 (년)">Target life (years)</span><input id="years" type="number" min="0.1" step="0.5"></label>
+  </fieldset>
+  <h2 data-en="Results" data-ko="결과">Results</h2>
+  <table id="results"></table>
+</section>
+<section>
+  <div id="view-wrap">
+    <canvas id="view"></canvas>
+    <div id="hud"></div>
+    <div id="tools">
+      <select id="cam">
+        <option value="0" data-en="Perspective" data-ko="원근">Perspective</option>
+        <option value="1" data-en="Top" data-ko="위">Top</option>
+        <option value="2" data-en="Side" data-ko="옆">Side</option>
+        <option value="3" data-en="Nut-follow" data-ko="너트 추적">Nut-follow</option>
+      </select>
+      <button id="t-color" class="on" data-en="Check colours" data-ko="판정 색">Check colours</button>
+      <button id="t-arrows" class="on" data-en="Forces" data-ko="힘">Forces</button>
+      <button id="t-whirl" class="on" data-en="Whirl ghost" data-ko="휘돌림">Whirl ghost</button>
+      <button id="t-play" class="on">Pause</button>
+    </div>
+    <div id="nogl" data-en="WebGL2 is not available — numbers and plots still work." data-ko="WebGL2를 사용할 수 없습니다 — 수치와 그래프는 계속 동작합니다.">WebGL2 is not available — numbers and plots still work.</div>
+  </div>
+  <div id="timebar">
+    <select id="slow">
+      <option value="1">1×</option>
+      <option value="0.25" selected>0.25×</option>
+      <option value="0.1">0.1×</option>
+    </select>
+    <input id="time" type="range" min="0" max="1000" value="0">
+    <span id="tlabel" class="note"></span>
+  </div>
+  <p class="note" data-en="Drag: orbit · right drag / two fingers: pan · wheel / pinch: zoom · double-click: reset · drag the carriage to scrub, the far support to change L." data-ko="드래그: 회전 · 우클릭 드래그 / 두 손가락: 이동 · 휠 / 핀치: 확대 · 더블클릭: 초기화 · 캐리지를 끌어 시간 이동, 끝 지지부를 끌어 L 변경.">Drag: orbit · right drag / two fingers: pan · wheel / pinch: zoom · double-click: reset · drag the carriage to scrub, the far support to change L.</p>
+  <div class="plots">
+    <div class="card"><h2 data-en="Force – speed envelope" data-ko="힘 – 속도 영역">Force – speed envelope</h2><canvas class="plot" id="p-env"></canvas></div>
+    <div class="card"><h2 data-en="Move: position / speed / thrust" data-ko="동작: 위치 / 속도 / 추력">Move: position / speed / thrust</h2><canvas class="plot" id="p-time"></canvas></div>
+  </div>
+  <div class="card" style="margin-top:12px">
+    <h2><span data-en="Find screws" data-ko="스크루 찾기">Find screws</span> <button id="find" data-en="Search" data-ko="검색">Search</button></h2>
+    <table><thead><tr><th>d × l</th><th data-en="Torque margin" data-ko="토크 여유">Torque margin</th><th data-en="Min SF" data-ko="최소 SF">Min SF</th><th data-en="Life (y)" data-ko="수명 (년)">Life (y)</th><th data-en="Motor rpm" data-ko="모터 rpm">Motor rpm</th></tr></thead><tbody id="hits"></tbody></table>
+  </div>
+  <p class="note" data-en="Educational estimates with generic typical values — validate with the screw maker's data and real tests before trusting a robot with it." data-ko="일반적인 값을 사용한 교육용 추정치입니다 — 로봇에 적용하기 전에 스크루 제조사 데이터와 실제 시험으로 검증하세요.">Educational estimates with generic typical values — validate with the screw maker's data and real tests before trusting a robot with it.</p>
+</section>
+</main>
+</body>
+</html>
